@@ -51,7 +51,7 @@ const char *appKey = "10101010101010101010101010101010";
 
 static TheThingsNetwork ttn;
 
-const unsigned TX_INTERVAL = 60;
+const unsigned TX_INTERVAL = 20;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
