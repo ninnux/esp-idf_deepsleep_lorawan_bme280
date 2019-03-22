@@ -114,8 +114,8 @@ void bmp280_status(void *pvParamters)
 	        else
 	            printf("\n");
 	    }
-	    int p=psum/i*10;
-	    int t=tsum/i*10;
+	    int p=(psum/i*10)/10;
+	    int t=(tsum/i*10)*10;
 	    sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
 	    xSemaphoreGive( xSemaphore );
 	}
