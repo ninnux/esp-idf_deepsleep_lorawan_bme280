@@ -56,7 +56,7 @@ const unsigned TX_INTERVAL = 60;
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 SemaphoreHandle_t xSemaphore = NULL;
-static uint8_t msgData[] = "Hello, world";
+static uint8_t msgData[30] = "Hello, world";
 
 
 void bmp280_status(void *pvParamters)
