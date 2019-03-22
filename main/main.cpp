@@ -232,7 +232,6 @@ extern "C" void app_main(void)
     if (ttn.join())
     {
         printf("Joined.\n");
-	vTaskDelay( 1000 / portTICK_RATE_MS );
         xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
 	
         xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
