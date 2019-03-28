@@ -16,6 +16,7 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "stdio.h"
+#include "lmic/lmic.h"
 
 #include "bmp280.h"
 
@@ -27,24 +28,24 @@
 
 // Copy the below hex string from the "Device EUI" field
 // on your device's overview page in the TTN console.
-const char *devEui = "0007f0000a7c5ac4";
+const char *devEui = CONFIG_devEui;
 
 // Copy the below two lines from bottom of the same page
-const char *appEui = "0000000000000005";
-const char *appKey = "10101010101010101010101010101010";
-
+const char *appEui = CONFIG_appEui;
+const char *appKey = CONFIG_appKey;
+#define LMIC_DEBUG_LEVEL  
 
 // Pins and other resources
 #define TTN_SPI_HOST      HSPI_HOST
 #define TTN_SPI_DMA_CHAN  1
-#define TTN_PIN_SPI_SCLK  18
-#define TTN_PIN_SPI_MOSI  23
-#define TTN_PIN_SPI_MISO  19
-#define TTN_PIN_NSS       5
+#define TTN_PIN_SPI_SCLK  CONFIG_TTN_PIN_SPI_SCLK
+#define TTN_PIN_SPI_MOSI  CONFIG_TTN_PIN_SPI_MOSI
+#define TTN_PIN_SPI_MISO  CONFIG_TTN_PIN_SPI_MISO
+#define TTN_PIN_NSS       CONFIG_TTN_PIN_NSS
 #define TTN_PIN_RXTX      TTN_NOT_CONNECTED
-#define TTN_PIN_RST       14
-#define TTN_PIN_DIO0      33
-#define TTN_PIN_DIO1      32
+#define TTN_PIN_RST       CONFIG_TTN_PIN_RST
+#define TTN_PIN_DIO0      CONFIG_TTN_PIN_DIO0
+#define TTN_PIN_DIO1      CONFIG_TTN_PIN_DIO1
 
 #define SDA_GPIO GPIO_NUM_21
 #define SCL_GPIO GPIO_NUM_22 
@@ -114,7 +115,7 @@ void bmp280_status(void *pvParamters)
 	        else
 	            printf("\n");
 	    }
-	    int p=(psum/i*10)/100000;
+	    int p=(psum/i*10)/100;
 	    int t=(tsum/i*10);
 	    sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
 	    xSemaphoreGive( xSemaphore );
@@ -183,7 +184,7 @@ void sendMessages(void* pvParameter)
 	        printf("Sending message...\n");
 	        TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
-		sleeppa(600);
+		sleeppa(120);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
 	}
@@ -228,10 +229,13 @@ extern "C" void app_main(void)
 
     ttn.onMessage(messageReceived);
     printf("Joining...\n");
+    LMIC.adrTxPow = 14;
+    LMIC_setDrTxpow(DR_SF10, 14);
+    LMIC.datarate = DR_SF10;
     if (ttn.join())
     {
         printf("Joined.\n");
-        xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
+    //    xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
 	
         xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
     }

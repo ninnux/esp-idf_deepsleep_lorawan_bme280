@@ -1,0 +1,63 @@
+menu "LoRa Configuration"
+
+config devEui
+    string "DEV Eui"
+    default "0000000000000000"
+    help
+        16 Byte DEV EUI address.
+
+config appEui
+    string "APP Eui"
+    default "0000000000000000"
+    help
+        16 Byte APP EUI address.
+
+config appKey
+    string "APP Key"
+    default "00000000000000000000000000000000"
+    help
+        32 Byte APP Key.
+
+config TTN_PIN_SPI_SCLK 
+    int "SPI_SCLK PIN"
+    default 5
+    help
+        LoRa CLK PIN.
+
+config TTN_PIN_SPI_MOSI 
+    int "SPI_MOSI PIN"
+    default 27
+    help
+        LoRa MOSI PIN.
+
+config TTN_PIN_SPI_MISO 
+    int "SPI_MISO PIN"
+    default 19
+    help
+        LoRa MISO PIN.
+
+config TTN_PIN_NSS 
+    int "NSS PIN"
+    default 18
+    help
+        LoRa Radio NSS PIN.
+
+config TTN_PIN_RST 
+    int "RST PIN"
+    default 14
+    help
+        LoRa Radio RST PIN.
+
+config TTN_PIN_DIO0 
+    int "DIO0 PIN"
+    default 26
+    help
+        LoRa Radio DIO0 PIN.
+
+config TTN_PIN_DIO1 
+    int "DIO1 PIN"
+    default 33
+    help
+        LoRa Radio DIO1 PIN.
+
+endmenu
