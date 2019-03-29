@@ -47,8 +47,8 @@ const char *appKey = CONFIG_appKey;
 #define TTN_PIN_DIO0      CONFIG_TTN_PIN_DIO0
 #define TTN_PIN_DIO1      CONFIG_TTN_PIN_DIO1
 
-#define SDA_GPIO GPIO_NUM_21
-#define SCL_GPIO GPIO_NUM_22 
+#define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
+#define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
 static TheThingsNetwork ttn;
 

@@ -61,3 +61,20 @@ config TTN_PIN_DIO1
         LoRa Radio DIO1 PIN.
 
 endmenu
+
+menu "BMX280 Configuration"
+
+config SCA_PIN 
+    int "SCA GPIO PIN"
+    default 21
+    help
+        SCA GPIO PIN.
+
+config SCL_PIN 
+    int "SCL GPIO PIN"
+    default 22
+    help
+        SCL GPIO PIN.
+
+
+endmenu
