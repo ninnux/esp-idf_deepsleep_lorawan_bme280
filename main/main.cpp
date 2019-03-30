@@ -57,7 +57,7 @@ const unsigned TX_INTERVAL = 20;
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 SemaphoreHandle_t xSemaphore = NULL;
-static uint8_t msgData[30] = "Hello, world";
+static uint8_t msgData[32] = "Hello, world";
 
 
 void bmp280_status(void *pvParamters)
@@ -67,6 +67,7 @@ void bmp280_status(void *pvParamters)
     bmp280_t dev;
     float psum=0;
     float tsum=0;
+    float hsum=0;
     esp_err_t res;
 
     if( xSemaphore != NULL )
@@ -79,7 +80,7 @@ void bmp280_status(void *pvParamters)
 	        vTaskDelay(250 / portTICK_PERIOD_MS);
 	    }
 
-	    while (bmp280_init_desc(&dev, BMP280_I2C_ADDRESS_1, I2C_NUM_0 , SDA_GPIO, SCL_GPIO) != ESP_OK)
+	    while (bmp280_init_desc(&dev, BMP280_I2C_ADDRESS_0, I2C_NUM_0 , SDA_GPIO, SCL_GPIO) != ESP_OK)
 	    {
 	        printf("Could not init device descriptor\n");
 	        vTaskDelay(250 / portTICK_PERIOD_MS);
@@ -110,14 +111,22 @@ void bmp280_status(void *pvParamters)
 		tsum+=temperature;
 
 	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
-	        if (bme280p)
+	        if (bme280p){
 	            printf(", Humidity: %.2f\n", humidity);
-	        else
+		    hsum+=humidity;
+		}
+	        else{
 	            printf("\n");
+		}
 	    }
 	    int p=(psum/i*10)/100;
 	    int t=(tsum/i*10);
-	    sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
+	    if (bme280p){
+	    	int h=(hsum/i*10);
+	    	sprintf((char*)msgData,"pres:%d,temp:%d,hum:%d",p,t,h);
+	    }else{
+	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
+	    }
 	    xSemaphoreGive( xSemaphore );
 	}
     }
