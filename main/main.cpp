@@ -96,7 +96,36 @@ void bmp280_status(void *pvParamters)
 	    printf("BMP280: found %s\n", bme280p ? "BME280" : "BMP280");
 
 	    float pressure, temperature, humidity;
-		int i=0;
+	    int i=0;
+	    while (i<10) // scaldo il sensore con 10 letture a vuoto
+	    {	
+	        i++;
+	        vTaskDelay(500 / portTICK_PERIOD_MS);
+	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
+	        {
+	            printf("Temperature/pressure reading failed\n");
+	            continue;
+	        }
+
+	        psum+=pressure;
+	        tsum+=temperature;
+
+	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
+	        if (bme280p){
+	            printf(", Humidity: %.2f\n", humidity);
+	            hsum+=humidity;
+	        }
+	        else{
+	            printf("\n");
+	        }
+	    }
+	    i=0;
+	    pressure=0;
+            temperature=0;
+            humidity=0;
+	    psum=0;
+            tsum=0;
+            hsum=0;
 	    while (i<10)
 	    {	
 		i++;
@@ -193,7 +222,7 @@ void sendMessages(void* pvParameter)
 	        printf("Sending message...\n");
 	        TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
-		sleeppa(120);
+		sleeppa(600);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
 	}
@@ -216,8 +245,14 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(err);
 	    
     vSemaphoreCreateBinary( xSemaphore );
-    // Initialize the NVS (non-volatile storage) for saving and restoring the keys
+
     err = nvs_flash_init();
+
+
+    vTaskDelay( 1000 / portTICK_RATE_MS );
+    xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+
+
     ESP_ERROR_CHECK(err);
 
     // Initialize SPI bus
@@ -244,12 +279,13 @@ extern "C" void app_main(void)
     if (ttn.join())
     {
         printf("Joined.\n");
-        xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
+//        xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
 	
         xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
     }
     else
     {
         printf("Join failed. Goodbye\n");
+	sleeppa(120);
     }
 }
