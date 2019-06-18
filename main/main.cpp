@@ -286,6 +286,6 @@ extern "C" void app_main(void)
     else
     {
         printf("Join failed. Goodbye\n");
-	sleeppa(120);
+	    sleeppa(600);
     }
 }
