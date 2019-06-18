@@ -16,9 +16,9 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "stdio.h"
-#include "lmic/lmic.h"
-
+extern "C" {
 #include "bmp280.h"
+}
 
 #include "TheThingsNetwork.h"
 
@@ -273,9 +273,9 @@ extern "C" void app_main(void)
 
     ttn.onMessage(messageReceived);
     printf("Joining...\n");
-    LMIC.adrTxPow = 14;
-    LMIC_setDrTxpow(DR_SF10, 14);
-    LMIC.datarate = DR_SF10;
+    //LMIC.adrTxPow = 14;
+    //LMIC_setDrTxpow(DR_SF10, 14);
+    //LMIC.datarate = DR_SF10;
     if (ttn.join())
     {
         printf("Joined.\n");
