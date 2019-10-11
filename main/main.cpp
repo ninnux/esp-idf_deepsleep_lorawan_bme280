@@ -21,6 +21,9 @@ extern "C" {
 }
 
 #include "TheThingsNetwork.h"
+#include "../src/lmic/oslmic.h"
+#include "../src/lmic/lmic.h"
+#include "../src/hal/hal_esp32.h"
 
 // NOTE:
 // The LoRaWAN frequency and the radio chip must be configured by running 'make menuconfig'.
@@ -55,10 +58,17 @@ static TheThingsNetwork ttn;
 const unsigned TX_INTERVAL = 20;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
+RTC_DATA_ATTR u4_t RTCnetid;
+RTC_DATA_ATTR u4_t RTCdevaddr;
+RTC_DATA_ATTR u1_t RTCnwkKey[16];
+RTC_DATA_ATTR u1_t RTCartKey[16];
+RTC_DATA_ATTR int RTCseqnoUp;
+RTC_DATA_ATTR int RTCseqnoDn;
 
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
 
+int deepsleep=0;
 
 void bmp280_status(void *pvParamters)
 {
@@ -181,10 +191,12 @@ void sleeppa(int sec)
         }
         case ESP_SLEEP_WAKEUP_TIMER: {
             printf("Wake up from timer. Time spent in deep sleep: %dms\n", sleep_time_ms);
+	    deepsleep=1;
             break;
         }
         case ESP_SLEEP_WAKEUP_UNDEFINED:
         default:
+	    deepsleep=0;
             printf("Not a deep sleep reset\n");
     }
 
@@ -222,6 +234,8 @@ void sendMessages(void* pvParameter)
 	        printf("Sending message...\n");
 	        TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
+		RTCseqnoUp=LMIC.seqnoUp;	
+		RTCseqnoDn=LMIC.seqnoDn;	
 		sleeppa(600);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
@@ -269,23 +283,35 @@ extern "C" void app_main(void)
     ttn.configurePins(TTN_SPI_HOST, TTN_PIN_NSS, TTN_PIN_RXTX, TTN_PIN_RST, TTN_PIN_DIO0, TTN_PIN_DIO1);
 
     // The below line can be commented after the first run as the data is saved in NVS
-    ttn.provision(devEui, appEui, appKey);
+    if(!deepsleep){
+    	ttn.provision(devEui, appEui, appKey);
 
-    ttn.onMessage(messageReceived);
-    printf("Joining...\n");
-    //LMIC.adrTxPow = 14;
-    //LMIC_setDrTxpow(DR_SF10, 14);
-    //LMIC.datarate = DR_SF10;
-    if (ttn.join())
-    {
-        printf("Joined.\n");
-//        xTaskCreatePinnedToCore(bmp280_status, "bmp280_status", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL, APP_CPU_NUM);
-	
-        xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
-    }
-    else
-    {
-        printf("Join failed. Goodbye\n");
-	    sleeppa(600);
+    	ttn.onMessage(messageReceived);
+    	printf("Joining...\n");
+    	//LMIC.adrTxPow = 14;
+    	//LMIC_setDrTxpow(DR_SF10, 14);
+    	//LMIC.datarate = DR_SF10;
+    	if (ttn.join())
+    	{
+    	    printf("Joined.\n");
+	    LMIC_getSessionKeys (&RTCnetid, &RTCdevaddr,RTCnwkKey,RTCartKey);	    
+    	    
+    	    xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+    	}
+    	else
+    	{
+    	    printf("Join failed. Goodbye\n");
+    	        sleeppa(600);
+    	}
+    }else{
+    	LMIC_reset();
+    	//hal_enterCriticalSection();
+    	LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
+    	//hal_leaveCriticalSection();
+	LMIC.seqnoUp=RTCseqnoUp;
+	LMIC.seqnoDn=RTCseqnoDn;
+	printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
+    	xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+
     }
 }
