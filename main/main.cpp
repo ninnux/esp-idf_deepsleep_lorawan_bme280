@@ -64,11 +64,11 @@ RTC_DATA_ATTR u1_t RTCnwkKey[16];
 RTC_DATA_ATTR u1_t RTCartKey[16];
 RTC_DATA_ATTR int RTCseqnoUp;
 RTC_DATA_ATTR int RTCseqnoDn;
+RTC_DATA_ATTR int deepsleep=0;
 
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
 
-int deepsleep=0;
 
 void bmp280_status(void *pvParamters)
 {
@@ -191,12 +191,12 @@ void sleeppa(int sec)
         }
         case ESP_SLEEP_WAKEUP_TIMER: {
             printf("Wake up from timer. Time spent in deep sleep: %dms\n", sleep_time_ms);
-	    deepsleep=1;
+	    //deepsleep=1;
             break;
         }
         case ESP_SLEEP_WAKEUP_UNDEFINED:
         default:
-	    deepsleep=0;
+	    //deepsleep=0;
             printf("Not a deep sleep reset\n");
     }
 
@@ -221,7 +221,7 @@ void sleeppa(int sec)
 
     printf("Entering deep sleep\n");
     gettimeofday(&sleep_enter_time, NULL);
-
+    deepsleep=1;
     esp_deep_sleep_start();
 }
 
@@ -236,7 +236,7 @@ void sendMessages(void* pvParameter)
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 		RTCseqnoUp=LMIC.seqnoUp;	
 		RTCseqnoDn=LMIC.seqnoDn;	
-		sleeppa(600);
+		sleeppa(20);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
 	}
@@ -295,7 +295,18 @@ extern "C" void app_main(void)
     	{
     	    printf("Joined.\n");
 	    LMIC_getSessionKeys (&RTCnetid, &RTCdevaddr,RTCnwkKey,RTCartKey);	    
-    	    
+            printf("netid:%x\n",RTCnetid);
+            printf("devaddr:%x\n",RTCdevaddr);
+            int i=0;
+            int k=0;
+            for(i=0;i<16;i++){
+            	printf("%.2x",RTCnwkKey[i]);
+            }
+            printf("\n");
+            for(k=0;k<16;k++){
+            	printf("%.2x",RTCartKey[k]);
+            }
+            printf("\n");
     	    xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
     	}
     	else
