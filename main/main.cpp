@@ -222,6 +222,7 @@ void sleeppa(int sec)
     printf("Entering deep sleep\n");
     gettimeofday(&sleep_enter_time, NULL);
     deepsleep=1;
+    hal_sleep();
     esp_deep_sleep_start();
 }
 
@@ -236,7 +237,8 @@ void sendMessages(void* pvParameter)
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 		RTCseqnoUp=LMIC.seqnoUp;	
 		RTCseqnoDn=LMIC.seqnoDn;	
-		sleeppa(20);
+		LMIC_shutdown();
+		sleeppa(300);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
 	}
@@ -312,7 +314,7 @@ extern "C" void app_main(void)
     	else
     	{
     	    printf("Join failed. Goodbye\n");
-    	        sleeppa(600);
+    	        sleeppa(300);
     	}
     }else{
     	LMIC_reset();
