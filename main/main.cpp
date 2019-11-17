@@ -53,6 +53,8 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
+#define TIMESLOT 11
+#define SLEEP_INTERVAL 300
 static TheThingsNetwork ttn;
 
 const unsigned TX_INTERVAL = 20;
@@ -65,6 +67,8 @@ RTC_DATA_ATTR u1_t RTCartKey[16];
 RTC_DATA_ATTR int RTCseqnoUp;
 RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
+
+RTC_DATA_ATTR int counter=0;
 
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
@@ -231,14 +235,21 @@ void sendMessages(void* pvParameter)
   	if( xSemaphore != NULL )
    	{
     	    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
-	        printf("Sending message...\n");
-	        TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
-	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
-		RTCseqnoUp=LMIC.seqnoUp;	
-		RTCseqnoDn=LMIC.seqnoDn;	
-		sleeppa(20);
-                //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
+		printf("counter=%d\n",counter);
+		if (counter==TIMESLOT){
+	        	printf("Sending message...\n");
+	        	TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
+	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
+			RTCseqnoUp=LMIC.seqnoUp;	
+			RTCseqnoDn=LMIC.seqnoDn;	
+			counter=0;
+                	//vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
+
+			}
+		}else{
+			counter+=1;
 		}
+		sleeppa(SLEEP_INTERVAL);
 	}
     }
 }
@@ -264,24 +275,27 @@ extern "C" void app_main(void)
 
 
     vTaskDelay( 1000 / portTICK_RATE_MS );
+   if(counter==TIMESLOT){
     xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+   }
 
 
     ESP_ERROR_CHECK(err);
 
-    // Initialize SPI bus
-    spi_bus_config_t spi_bus_config;
-    spi_bus_config.miso_io_num = TTN_PIN_SPI_MISO;
-    spi_bus_config.mosi_io_num = TTN_PIN_SPI_MOSI;
-    spi_bus_config.sclk_io_num = TTN_PIN_SPI_SCLK;
-    spi_bus_config.quadwp_io_num = -1;
-    spi_bus_config.quadhd_io_num = -1;
-    spi_bus_config.max_transfer_sz = 0;
-    err = spi_bus_initialize(TTN_SPI_HOST, &spi_bus_config, TTN_SPI_DMA_CHAN);
-    ESP_ERROR_CHECK(err);
-    // Configure the SX127x pins
-    ttn.configurePins(TTN_SPI_HOST, TTN_PIN_NSS, TTN_PIN_RXTX, TTN_PIN_RST, TTN_PIN_DIO0, TTN_PIN_DIO1);
-
+   if(counter==TIMESLOT or !deepsleep){
+    	// Initialize SPI bus
+    	spi_bus_config_t spi_bus_config;
+    	spi_bus_config.miso_io_num = TTN_PIN_SPI_MISO;
+    	spi_bus_config.mosi_io_num = TTN_PIN_SPI_MOSI;
+    	spi_bus_config.sclk_io_num = TTN_PIN_SPI_SCLK;
+    	spi_bus_config.quadwp_io_num = -1;
+    	spi_bus_config.quadhd_io_num = -1;
+    	spi_bus_config.max_transfer_sz = 0;
+    	err = spi_bus_initialize(TTN_SPI_HOST, &spi_bus_config, TTN_SPI_DMA_CHAN);
+    	ESP_ERROR_CHECK(err);
+    	// Configure the SX127x pins
+    	ttn.configurePins(TTN_SPI_HOST, TTN_PIN_NSS, TTN_PIN_RXTX, TTN_PIN_RST, TTN_PIN_DIO0, TTN_PIN_DIO1);
+    }
     // The below line can be commented after the first run as the data is saved in NVS
     if(!deepsleep){
     	ttn.provision(devEui, appEui, appKey);
@@ -315,13 +329,15 @@ extern "C" void app_main(void)
     	        sleeppa(600);
     	}
     }else{
-    	LMIC_reset();
-    	//hal_enterCriticalSection();
-    	LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
-    	//hal_leaveCriticalSection();
-	LMIC.seqnoUp=RTCseqnoUp;
-	LMIC.seqnoDn=RTCseqnoDn;
-	printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
+	if (counter==TIMESLOT){
+    		LMIC_reset();
+    		//hal_enterCriticalSection();
+    		LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
+    		//hal_leaveCriticalSection();
+		LMIC.seqnoUp=RTCseqnoUp;
+		LMIC.seqnoDn=RTCseqnoDn;
+		printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
+         }
     	xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
 
     }
