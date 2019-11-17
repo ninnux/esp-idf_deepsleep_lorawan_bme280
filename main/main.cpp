@@ -53,7 +53,7 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 11
+#define TIMESLOT 11 
 #define SLEEP_INTERVAL 300
 static TheThingsNetwork ttn;
 
@@ -67,7 +67,6 @@ RTC_DATA_ATTR u1_t RTCartKey[16];
 RTC_DATA_ATTR int RTCseqnoUp;
 RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
-
 RTC_DATA_ATTR int counter=0;
 
 SemaphoreHandle_t xSemaphore = NULL;
@@ -210,13 +209,13 @@ void sleeppa(int sec)
     printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
     esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
 
-    const int ext_wakeup_pin_1 = 25;
-    const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
-    const int ext_wakeup_pin_2 = 26;
-    const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
+    //const int ext_wakeup_pin_1 = 25;
+    //const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
+    //const int ext_wakeup_pin_2 = 26;
+    //const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
 
-    printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
-    esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+    //printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
+    //esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
 
     // Isolate GPIO12 pin from external circuits. This is needed for modules
     // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
@@ -235,8 +234,6 @@ void sendMessages(void* pvParameter)
   	if( xSemaphore != NULL )
    	{
     	    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
-		printf("counter=%d\n",counter);
-		if (counter==TIMESLOT){
 	        	printf("Sending message...\n");
 	        	TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
 	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
@@ -244,12 +241,9 @@ void sendMessages(void* pvParameter)
 			RTCseqnoDn=LMIC.seqnoDn;	
 			counter=0;
                 	//vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
+			sleeppa(SLEEP_INTERVAL);
 
-			}
-		}else{
-			counter+=1;
-		}
-		sleeppa(SLEEP_INTERVAL);
+	   }
 	}
     }
 }
@@ -329,6 +323,7 @@ extern "C" void app_main(void)
     	        sleeppa(600);
     	}
     }else{
+	printf("counter=%d\n",counter);
 	if (counter==TIMESLOT){
     		LMIC_reset();
     		//hal_enterCriticalSection();
@@ -337,8 +332,11 @@ extern "C" void app_main(void)
 		LMIC.seqnoUp=RTCseqnoUp;
 		LMIC.seqnoDn=RTCseqnoDn;
 		printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
-         }
-    	xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+    		xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+	}else{
+		counter+=1;
+		sleeppa(SLEEP_INTERVAL);
+	}
 
     }
 }
