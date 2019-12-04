@@ -71,7 +71,9 @@ RTC_DATA_ATTR int counter=0;
 
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
-
+ 
+RTC_DATA_ATTR char rtc_buffer[1024];
+RTC_DATA_ATTR int rtc_buffer_len=0;
 
 void bmp280_status(void *pvParamters)
 {
@@ -110,10 +112,15 @@ void bmp280_status(void *pvParamters)
 
 	    float pressure, temperature, humidity;
 	    int i=0;
+	    bool busy;
 	    while (i<10) // scaldo il sensore con 10 letture a vuoto
 	    {	
 	        i++;
 	        vTaskDelay(500 / portTICK_PERIOD_MS);
+		// force mode
+		bmp280_force_measurement(&dev);
+		do { bmp280_is_measuring(&dev, &busy); } while(busy);	
+		//
 	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
 	        {
 	            printf("Temperature/pressure reading failed\n");
@@ -169,6 +176,9 @@ void bmp280_status(void *pvParamters)
 	    }else{
 	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
 	    }
+  	    //char* keys4[]={"temp","batt"}; 
+  	    //int values4[]={250,42};
+  	    //sensordata_insert_values2(&rtc_buffer,counter*1111111,keys4,values4,2,&rtc_buffer_len);
 	    xSemaphoreGive( xSemaphore );
 	}
     }
@@ -198,9 +208,11 @@ void sleeppa(int sec)
             break;
         }
         case ESP_SLEEP_WAKEUP_UNDEFINED:
-        default:
+        default:{
 	    //deepsleep=0;
             printf("Not a deep sleep reset\n");
+  	    sensordata_init2(&rtc_buffer,&rtc_buffer_len);
+        }
     }
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -269,14 +281,12 @@ extern "C" void app_main(void)
 
 
     vTaskDelay( 1000 / portTICK_RATE_MS );
-   if(counter==TIMESLOT){
-    xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
-   }
 
 
     ESP_ERROR_CHECK(err);
 
    if(counter==TIMESLOT or !deepsleep){
+    	xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
     	// Initialize SPI bus
     	spi_bus_config_t spi_bus_config;
     	spi_bus_config.miso_io_num = TTN_PIN_SPI_MISO;
@@ -315,6 +325,9 @@ extern "C" void app_main(void)
             	printf("%.2x",RTCartKey[k]);
             }
             printf("\n");
+
+
+
     	    xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
     	}
     	else
