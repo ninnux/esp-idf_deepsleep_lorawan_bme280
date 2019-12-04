@@ -53,8 +53,8 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 11 
-#define SLEEP_INTERVAL 300
+#define TIMESLOT 1 
+#define SLEEP_INTERVAL 10
 static TheThingsNetwork ttn;
 
 const unsigned TX_INTERVAL = 20;
@@ -69,10 +69,14 @@ RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
 RTC_DATA_ATTR int counter=0;
 
+extern "C" {
+#include "ninux_sensordata_pb.h"
+}
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
  
-RTC_DATA_ATTR char rtc_buffer[1024];
+RTC_DATA_ATTR uint8_t rtc_buffer[1024];
+//RTC_DATA_ATTR char rtc_buffer[1024];
 RTC_DATA_ATTR int rtc_buffer_len=0;
 
 void bmp280_status(void *pvParamters)
@@ -173,12 +177,15 @@ void bmp280_status(void *pvParamters)
 	    if (bme280p){
 	    	int h=(hsum/i*10);
 	    	sprintf((char*)msgData,"pres:%d,temp:%d,hum:%d",p,t,h);
+  	        char* keys[]={"pres","temp","hum"}; 
+  	        int values[]={p,t,h};
+  	        sensordata_insert_values2((unsigned char **) &rtc_buffer,counter*1111111,keys,values,3,&rtc_buffer_len);
 	    }else{
 	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
+  	        char* keys[]={"pres","temp"}; 
+  	        int values[]={p,t};
+  	        sensordata_insert_values2((unsigned char**) &rtc_buffer,counter*1111111,keys,values,2,&rtc_buffer_len);
 	    }
-  	    //char* keys4[]={"temp","batt"}; 
-  	    //int values4[]={250,42};
-  	    //sensordata_insert_values2(&rtc_buffer,counter*1111111,keys4,values4,2,&rtc_buffer_len);
 	    xSemaphoreGive( xSemaphore );
 	}
     }
@@ -211,7 +218,7 @@ void sleeppa(int sec)
         default:{
 	    //deepsleep=0;
             printf("Not a deep sleep reset\n");
-  	    sensordata_init2(&rtc_buffer,&rtc_buffer_len);
+  	    sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
         }
     }
 
@@ -248,6 +255,7 @@ void sendMessages(void* pvParameter)
     	    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
 	        	printf("Sending message...\n");
 	        	TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
+	        	//TTNResponseCode res = ttn.transmitMessage((uint8_t*) rtc_buffer, rtc_buffer_len+1);
 	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 			RTCseqnoUp=LMIC.seqnoUp;	
 			RTCseqnoDn=LMIC.seqnoDn;	
@@ -286,7 +294,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(err);
 
    if(counter==TIMESLOT or !deepsleep){
-    	xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+    	//xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
     	// Initialize SPI bus
     	spi_bus_config_t spi_bus_config;
     	spi_bus_config.miso_io_num = TTN_PIN_SPI_MISO;
@@ -337,6 +345,7 @@ extern "C" void app_main(void)
     	}
     }else{
 	printf("counter=%d\n",counter);
+    	xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
 	if (counter==TIMESLOT){
     		LMIC_reset();
     		//hal_enterCriticalSection();
@@ -348,7 +357,17 @@ extern "C" void app_main(void)
     		xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
 	}else{
 		counter+=1;
-		sleeppa(SLEEP_INTERVAL);
+    		while (1) {
+
+    		   vTaskDelay( 1000 / portTICK_RATE_MS );
+                   printf("aspetto che legga il sensore...\n");
+  		   if( xSemaphore != NULL )
+     		     {
+    		      if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
+		      	sleeppa(SLEEP_INTERVAL);
+		      }
+        	     }
+        	}
 	}
 
     }
