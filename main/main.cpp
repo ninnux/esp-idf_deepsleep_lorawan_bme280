@@ -53,7 +53,7 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 1 
+#define TIMESLOT 0 
 #define SLEEP_INTERVAL 10
 static TheThingsNetwork ttn;
 
@@ -73,9 +73,10 @@ extern "C" {
 #include "ninux_sensordata_pb.h"
 }
 SemaphoreHandle_t xSemaphore = NULL;
-static uint8_t msgData[32] = "Hello, world";
+static uint8_t msgData[50] = "Hello, world";
+//static uint8_t msgData[1024] = "Hello, world";
  
-RTC_DATA_ATTR uint8_t rtc_buffer[1024];
+RTC_DATA_ATTR uint8_t rtc_buffer[128];
 //RTC_DATA_ATTR char rtc_buffer[1024];
 RTC_DATA_ATTR int rtc_buffer_len=0;
 
@@ -177,14 +178,16 @@ void bmp280_status(void *pvParamters)
 	    if (bme280p){
 	    	int h=(hsum/i*10);
 	    	sprintf((char*)msgData,"pres:%d,temp:%d,hum:%d",p,t,h);
-  	        char* keys[]={"pres","temp","hum"}; 
-  	        int values[]={p,t,h};
-  	        sensordata_insert_values2((unsigned char **) &rtc_buffer,counter*1111111,keys,values,3,&rtc_buffer_len);
+  	        //char* keys[]={"pres","temp","hum"}; 
+  	        //int values[]={p,t,h};
+  	        //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+	    	//sprintf((char*)msgData,"%s",rtc_buffer);
+	    	//sprintf((char*)msgData,"pidfsfsdsfsfsdfjksldfjlkjsfdlkjsdflkjsdflkjsdflkjsdflkjsdfklkldmslkcdsclkmsclmsdlfsdlfsdjflkjmcsklmcsldfjslkmscklmslkfslkmcsklddslkvdsklfvdklvsklcmsdlkcmslvmsdlnslkdvsklcmsklnvlsdkvnslkdnslkdmfslkfskldfslkcs");
 	    }else{
 	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
-  	        char* keys[]={"pres","temp"}; 
-  	        int values[]={p,t};
-  	        sensordata_insert_values2((unsigned char**) &rtc_buffer,counter*1111111,keys,values,2,&rtc_buffer_len);
+  	        //char* keys[]={"pres","temp"}; 
+  	        //int values[]={p,t};
+  	        //sensordata_insert_values2((unsigned char**) &rtc_buffer,counter*1111111,keys,values,2,&rtc_buffer_len);
 	    }
 	    xSemaphoreGive( xSemaphore );
 	}
@@ -254,12 +257,17 @@ void sendMessages(void* pvParameter)
    	{
     	    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
 	        	printf("Sending message...\n");
-	        	TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
-	        	//TTNResponseCode res = ttn.transmitMessage((uint8_t*) rtc_buffer, rtc_buffer_len+1);
+
+  	                //char* keys[]={"pres","temp","hum"}; 
+  	                //int values[]={999,33,66};
+  	                //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+	        	//TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
+			printf("rtc_buffer_len:%d\n",rtc_buffer_len);
+	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) rtc_buffer, rtc_buffer_len);
 	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 			RTCseqnoUp=LMIC.seqnoUp;	
 			RTCseqnoDn=LMIC.seqnoDn;	
-			counter=0;
+			//counter=0;
                 	//vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 			sleeppa(SLEEP_INTERVAL);
 
@@ -292,6 +300,7 @@ extern "C" void app_main(void)
 
 
     ESP_ERROR_CHECK(err);
+
 
    if(counter==TIMESLOT or !deepsleep){
     	//xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
@@ -335,8 +344,8 @@ extern "C" void app_main(void)
             printf("\n");
 
 
-
-    	    xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+	    sleeppa(SLEEP_INTERVAL);
+    	    //xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
     	}
     	else
     	{
@@ -344,9 +353,13 @@ extern "C" void app_main(void)
     	        sleeppa(600);
     	}
     }else{
-	printf("counter=%d\n",counter);
-    	xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
 	if (counter==TIMESLOT){
+		printf("counter=%d\n",counter);
+    		xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+  		char* keys[]={"pres","temp","hum"}; 
+  		int values[]={999,33,66};
+  		sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+
     		LMIC_reset();
     		//hal_enterCriticalSection();
     		LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
