@@ -25,6 +25,7 @@ extern "C" {
 #include "../src/lmic/lmic.h"
 #include "../src/hal/hal_esp32.h"
 
+#include "cayenne_lpp.h"
 // NOTE:
 // The LoRaWAN frequency and the radio chip must be configured by running 'make menuconfig'.
 // Go to Components / The Things Network, select the appropriate values and save.
@@ -53,7 +54,7 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 0 
+#define TIMESLOT 1 
 #define SLEEP_INTERVAL 10
 static TheThingsNetwork ttn;
 
@@ -69,6 +70,20 @@ RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
 RTC_DATA_ATTR int counter=0;
 
+extern "C"{
+static void _print_buffer(cayenne_lpp_t *lpp)
+{
+    printf("buffer:");
+    uint8_t i=0;
+    for (i = 0; i < lpp->cursor; ++i) {
+	printf("%0X",lpp->buffer[i]);
+    }
+    printf("\n");
+
+}
+
+}
+
 extern "C" {
 #include "ninux_sensordata_pb.h"
 }
@@ -76,9 +91,13 @@ SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[50] = "Hello, world";
 //static uint8_t msgData[1024] = "Hello, world";
  
-RTC_DATA_ATTR uint8_t rtc_buffer[128];
+//RTC_DATA_ATTR uint8_t rtc_buffer[128];
 //RTC_DATA_ATTR char rtc_buffer[1024];
-RTC_DATA_ATTR int rtc_buffer_len=0;
+//RTC_DATA_ATTR int rtc_buffer_len=0;
+
+RTC_DATA_ATTR cayenne_lpp_t tlpp = { 0 };
+RTC_DATA_ATTR cayenne_lpp_t hlpp = { 0 };
+RTC_DATA_ATTR cayenne_lpp_t plpp = { 0 };
 
 void bmp280_status(void *pvParamters)
 {
@@ -173,21 +192,14 @@ void bmp280_status(void *pvParamters)
 	            printf("\n");
 		}
 	    }
-	    int p=(psum/i*10)/100;
-	    int t=(tsum/i*10);
+	    //int p=(psum/i*10)/100;
+	    //int t=(tsum/i*10);
 	    if (bme280p){
 	    	int h=(hsum/i*10);
-	    	sprintf((char*)msgData,"pres:%d,temp:%d,hum:%d",p,t,h);
-  	        //char* keys[]={"pres","temp","hum"}; 
-  	        //int values[]={p,t,h};
-  	        //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
-	    	//sprintf((char*)msgData,"%s",rtc_buffer);
-	    	//sprintf((char*)msgData,"pidfsfsdsfsfsdfjksldfjlkjsfdlkjsdflkjsdflkjsdflkjsdflkjsdfklkldmslkcdsclkmsclmsdlfsdlfsdjflkjmcsklmcsldfjslkmscklmslkfslkmcsklddslkvdsklfvdklvsklcmsdlkcmslvmsdlnslkdvsklcmsklnvlsdkvnslkdnslkdmfslkfskldfslkcs");
 	    }else{
-	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
-  	        //char* keys[]={"pres","temp"}; 
-  	        //int values[]={p,t};
-  	        //sensordata_insert_values2((unsigned char**) &rtc_buffer,counter*1111111,keys,values,2,&rtc_buffer_len);
+              cayenne_lpp_add_temperature(&tlpp, counter, tsum/i);
+              cayenne_lpp_add_relative_humidity(&hlpp, counter, hsum/i);
+              cayenne_lpp_add_barometric_pressure(&plpp, counter, psum/i);
 	    }
 	    xSemaphoreGive( xSemaphore );
 	}
@@ -221,7 +233,10 @@ void sleeppa(int sec)
         default:{
 	    //deepsleep=0;
             printf("Not a deep sleep reset\n");
-  	    sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
+	    cayenne_lpp_reset(&tlpp);
+	    cayenne_lpp_reset(&hlpp);
+	    cayenne_lpp_reset(&plpp);
+  	    //sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
         }
     }
 
@@ -262,9 +277,15 @@ void sendMessages(void* pvParameter)
   	                //int values[]={999,33,66};
   	                //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
 	        	//TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
-			printf("rtc_buffer_len:%d\n",rtc_buffer_len);
-	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) rtc_buffer, rtc_buffer_len);
+			printf("tlpp.cursor:%d\n",tlpp.cursor);
+			printf("tlpp.cursor:%s\n",(const char *) tlpp.buffer);
+	      		_print_buffer(&tlpp);
+	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) tlpp.buffer, tlpp.cursor);
 	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
+	        	//res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
+	        	//printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
+	        	//res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
+	        	//printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 			RTCseqnoUp=LMIC.seqnoUp;	
 			RTCseqnoDn=LMIC.seqnoDn;	
 			//counter=0;
@@ -355,10 +376,11 @@ extern "C" void app_main(void)
     }else{
 	if (counter==TIMESLOT){
 		printf("counter=%d\n",counter);
-    		xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
-  		char* keys[]={"pres","temp","hum"}; 
-  		int values[]={999,33,66};
-  		sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+    		//xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+  		//char* keys[]={"pres","temp","hum"}; 
+  		//int values[]={999,33,66};
+  		//sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+		//cayenne_lpp_add_temperature(&tlpp, 1, 99);
 
     		LMIC_reset();
     		//hal_enterCriticalSection();
@@ -368,7 +390,9 @@ extern "C" void app_main(void)
 		LMIC.seqnoDn=RTCseqnoDn;
 		printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
     		xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+		counter=0;
 	}else{
+    		xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
 		counter+=1;
     		while (1) {
 
