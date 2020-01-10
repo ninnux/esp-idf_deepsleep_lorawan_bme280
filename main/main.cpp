@@ -200,10 +200,12 @@ void bmp280_status(void *pvParamters)
 	    //int t=(tsum/i*10);
 	    if (bme280p){
 	    	//int h=(hsum/i*10);
-	      	h=hsum/i;
+	      p=psum/i/100;
+	      t=tsum/i;
+	      h=hsum/i;
 	    }else{
 	      p=psum/i;
-	      t=psum/i;
+	      t=tsum/i;
 	      h=hsum/i;
               //cayenne_lpp_add_temperature(&tlpp, counter, tsum/i);
               //cayenne_lpp_add_relative_humidity(&hlpp, counter, hsum/i);
@@ -416,9 +418,6 @@ extern "C" void app_main(void)
                counter=0;
        }else{
                xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
-               cayenne_lpp_add_temperature(&tlpp, counter, t);
-               cayenne_lpp_add_relative_humidity(&hlpp, counter, h);
-               cayenne_lpp_add_barometric_pressure(&plpp, counter, p);
                counter+=1;
                while (1) {
 
@@ -427,6 +426,10 @@ extern "C" void app_main(void)
                   if( xSemaphore != NULL )
                     {
                      if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
+	       	       printf("p:%f h:%f t:%f\n",p,h,t);
+               	       cayenne_lpp_add_temperature(&tlpp, counter, t);
+               	       cayenne_lpp_add_relative_humidity(&hlpp, counter, h);
+               	       cayenne_lpp_add_barometric_pressure(&plpp, counter, p);
                        sleeppa(SLEEP_INTERVAL);
                      }
                     }
