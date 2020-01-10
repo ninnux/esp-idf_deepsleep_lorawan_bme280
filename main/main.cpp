@@ -70,6 +70,10 @@ RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
 RTC_DATA_ATTR int counter=0;
 
+float t;
+float p;
+float h;
+
 extern "C"{
 static void _print_buffer(cayenne_lpp_t *lpp)
 {
@@ -195,11 +199,15 @@ void bmp280_status(void *pvParamters)
 	    //int p=(psum/i*10)/100;
 	    //int t=(tsum/i*10);
 	    if (bme280p){
-	    	int h=(hsum/i*10);
+	    	//int h=(hsum/i*10);
+	      	h=hsum/i;
 	    }else{
-              cayenne_lpp_add_temperature(&tlpp, counter, tsum/i);
-              cayenne_lpp_add_relative_humidity(&hlpp, counter, hsum/i);
-              cayenne_lpp_add_barometric_pressure(&plpp, counter, psum/i);
+	      p=psum/i;
+	      t=psum/i;
+	      h=hsum/i;
+              //cayenne_lpp_add_temperature(&tlpp, counter, tsum/i);
+              //cayenne_lpp_add_relative_humidity(&hlpp, counter, hsum/i);
+              //cayenne_lpp_add_barometric_pressure(&plpp, counter, psum/i);
 	    }
 	    xSemaphoreGive( xSemaphore );
 	}
@@ -277,15 +285,30 @@ void sendMessages(void* pvParameter)
   	                //int values[]={999,33,66};
   	                //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
 	        	//TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
-			printf("tlpp.cursor:%d\n",tlpp.cursor);
-			printf("tlpp.cursor:%s\n",(const char *) tlpp.buffer);
 	      		_print_buffer(&tlpp);
 	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) tlpp.buffer, tlpp.cursor);
-	        	printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
-	        	//res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
-	        	//printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
-	        	//res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
-	        	//printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
+	        	if(res == kTTNSuccessfulTransmission){
+				 printf("Message sent.\n");
+	    			cayenne_lpp_reset(&tlpp);
+			}else{
+				printf("Transmission failed.\n");
+			}
+	      		_print_buffer(&hlpp);
+	        	res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
+	        	if(res == kTTNSuccessfulTransmission){
+				 printf("Message sent.\n");
+	    			cayenne_lpp_reset(&hlpp);
+			}else{
+				printf("Transmission failed.\n");
+			}
+	      		_print_buffer(&plpp);
+	        	res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
+	        	if(res == kTTNSuccessfulTransmission){
+				 printf("Message sent.\n");
+	    			cayenne_lpp_reset(&plpp);
+			}else{
+				printf("Transmission failed.\n");
+			}
 			RTCseqnoUp=LMIC.seqnoUp;	
 			RTCseqnoDn=LMIC.seqnoDn;	
 			//counter=0;
@@ -374,38 +397,40 @@ extern "C" void app_main(void)
     	        sleeppa(600);
     	}
     }else{
-	if (counter==TIMESLOT){
-		printf("counter=%d\n",counter);
-    		//xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
-  		//char* keys[]={"pres","temp","hum"}; 
-  		//int values[]={999,33,66};
-  		//sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
-		//cayenne_lpp_add_temperature(&tlpp, 1, 99);
+       if (counter==TIMESLOT){
+               printf("counter=%d\n",counter);
+               //xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+               //char* keys[]={"pres","temp","hum"}; 
+               //int values[]={999,33,66};
+               //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+               //cayenne_lpp_add_temperature(&tlpp, 1, 99);
 
-    		LMIC_reset();
-    		//hal_enterCriticalSection();
-    		LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
-    		//hal_leaveCriticalSection();
-		LMIC.seqnoUp=RTCseqnoUp;
-		LMIC.seqnoDn=RTCseqnoDn;
-		printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
-    		xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
-		counter=0;
-	}else{
-    		xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
-		counter+=1;
-    		while (1) {
+               LMIC_reset();
+               //hal_enterCriticalSection();
+               LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
+               //hal_leaveCriticalSection();
+               LMIC.seqnoUp=RTCseqnoUp;
+               LMIC.seqnoDn=RTCseqnoDn;
+               printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
+               xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
+               counter=0;
+       }else{
+               xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+               cayenne_lpp_add_temperature(&tlpp, counter, t);
+               cayenne_lpp_add_relative_humidity(&hlpp, counter, h);
+               cayenne_lpp_add_barometric_pressure(&plpp, counter, p);
+               counter+=1;
+               while (1) {
 
-    		   vTaskDelay( 1000 / portTICK_RATE_MS );
+                  vTaskDelay( 1000 / portTICK_RATE_MS );
                    printf("aspetto che legga il sensore...\n");
-  		   if( xSemaphore != NULL )
-     		     {
-    		      if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
-		      	sleeppa(SLEEP_INTERVAL);
-		      }
-        	     }
-        	}
-	}
-
+                  if( xSemaphore != NULL )
+                    {
+                     if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
+                       sleeppa(SLEEP_INTERVAL);
+                     }
+                    }
+               }
+       }
     }
 }
