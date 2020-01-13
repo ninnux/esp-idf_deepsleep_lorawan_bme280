@@ -54,8 +54,8 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 1 
-#define SLEEP_INTERVAL 10
+#define TIMESLOT 8 
+#define SLEEP_INTERVAL 300
 static TheThingsNetwork ttn;
 
 const unsigned TX_INTERVAL = 20;
@@ -77,10 +77,10 @@ float h;
 extern "C"{
 static void _print_buffer(cayenne_lpp_t *lpp)
 {
-    printf("buffer:");
+    printf("buffer di %d bytes:",lpp->cursor);
     uint8_t i=0;
     for (i = 0; i < lpp->cursor; ++i) {
-	printf("%0X",lpp->buffer[i]);
+	printf("%d,",lpp->buffer[i]);
     }
     printf("\n");
 
@@ -207,9 +207,6 @@ void bmp280_status(void *pvParamters)
 	      p=psum/i;
 	      t=tsum/i;
 	      h=hsum/i;
-              //cayenne_lpp_add_temperature(&tlpp, counter, tsum/i);
-              //cayenne_lpp_add_relative_humidity(&hlpp, counter, hsum/i);
-              //cayenne_lpp_add_barometric_pressure(&plpp, counter, psum/i);
 	    }
 	    xSemaphoreGive( xSemaphore );
 	}
@@ -246,6 +243,9 @@ void sleeppa(int sec)
 	    cayenne_lpp_reset(&tlpp);
 	    cayenne_lpp_reset(&hlpp);
 	    cayenne_lpp_reset(&plpp);
+            //cayenne_lpp_add_analog_input(&tlpp,0,SLEEP_INTERVAL);
+            //cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
+            //cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
   	    //sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
         }
     }
@@ -287,6 +287,7 @@ void sendMessages(void* pvParameter)
   	                //int values[]={999,33,66};
   	                //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
 	        	//TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
+               cayenne_lpp_add_analog_input(&tlpp,0,SLEEP_INTERVAL);
 	      		_print_buffer(&tlpp);
 	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) tlpp.buffer, tlpp.cursor);
 	        	if(res == kTTNSuccessfulTransmission){
@@ -295,6 +296,7 @@ void sendMessages(void* pvParameter)
 			}else{
 				printf("Transmission failed.\n");
 			}
+               cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
 	      		_print_buffer(&hlpp);
 	        	res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
 	        	if(res == kTTNSuccessfulTransmission){
@@ -303,6 +305,7 @@ void sendMessages(void* pvParameter)
 			}else{
 				printf("Transmission failed.\n");
 			}
+               cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
 	      		_print_buffer(&plpp);
 	        	res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
 	        	if(res == kTTNSuccessfulTransmission){
@@ -413,10 +416,15 @@ extern "C" void app_main(void)
                //hal_leaveCriticalSection();
                LMIC.seqnoUp=RTCseqnoUp;
                LMIC.seqnoDn=RTCseqnoDn;
+
+
                printf("mando il messaggio in ABP con numeri di sequenza Up:%d Dn:%d\n",LMIC.seqnoUp,LMIC.seqnoDn);
                xTaskCreate(sendMessages, "send_messages", 1024 * 4, (void* )0, 3, NULL);
                counter=0;
        }else{
+               //cayenne_lpp_add_analog_input(&tlpp,0,SLEEP_INTERVAL);
+               //cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
+               //cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
                xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
                counter+=1;
                while (1) {
@@ -427,9 +435,12 @@ extern "C" void app_main(void)
                     {
                      if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
 	       	       printf("p:%f h:%f t:%f\n",p,h,t);
-               	       cayenne_lpp_add_temperature(&tlpp, counter, t);
-               	       cayenne_lpp_add_relative_humidity(&hlpp, counter, h);
-               	       cayenne_lpp_add_barometric_pressure(&plpp, counter, p);
+               	       cayenne_lpp_add_temperature(&tlpp, counter-1, t);
+               	       cayenne_lpp_add_relative_humidity(&hlpp, counter-1, h);
+               	       cayenne_lpp_add_barometric_pressure(&plpp, counter-1, p);
+              	       _print_buffer(&tlpp);
+              	       _print_buffer(&hlpp);
+              	       _print_buffer(&plpp);
                        sleeppa(SLEEP_INTERVAL);
                      }
                     }
