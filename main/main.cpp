@@ -18,6 +18,7 @@
 #include "stdio.h"
 extern "C" {
 #include "bmp280.h"
+#include "bme280.h"
 }
 
 #include "TheThingsNetwork.h"
@@ -213,6 +214,183 @@ void bmp280_status(void *pvParamters)
     }
     vTaskDelete( NULL );
 }
+
+
+
+extern "C" void i2c_master_init()
+{
+	i2c_config_t i2c_config = {
+		.mode = I2C_MODE_MASTER,
+		.sda_io_num = SDA_GPIO,
+		.sda_pullup_en = GPIO_PULLUP_ENABLE,
+		.scl_io_num = SCL_GPIO,
+		.scl_pullup_en = GPIO_PULLUP_ENABLE,
+		//.master.clk_speed = 1000000
+	};
+	i2c_param_config(I2C_NUM_0, &i2c_config);
+	i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+}
+
+extern "C" s8 BME280_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
+{
+	s32 iError = BME280_INIT_VALUE;
+
+	esp_err_t espRc;
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
+
+	i2c_master_write_byte(cmd, reg_addr, true);
+	i2c_master_write(cmd, reg_data, cnt, true);
+	i2c_master_stop(cmd);
+
+	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10/portTICK_PERIOD_MS);
+	if (espRc == ESP_OK) {
+		iError = SUCCESS;
+	} else {
+		iError = FAIL;
+	}
+	i2c_cmd_link_delete(cmd);
+
+	return (s8)iError;
+}
+
+s8 BME280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
+{
+	s32 iError = BME280_INIT_VALUE;
+	esp_err_t espRc;
+
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
+	i2c_master_write_byte(cmd, reg_addr, true);
+
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_READ, true);
+
+	if (cnt > 1) {
+		i2c_master_read(cmd, reg_data, cnt-1, I2C_MASTER_ACK);
+	}
+	i2c_master_read_byte(cmd, reg_data+cnt-1, I2C_MASTER_NACK);
+	i2c_master_stop(cmd);
+
+	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10/portTICK_PERIOD_MS);
+	if (espRc == ESP_OK) {
+		iError = SUCCESS;
+	} else {
+		iError = FAIL;
+	}
+
+	i2c_cmd_link_delete(cmd);
+
+}
+
+void BME280_delay_msek(u32 msek)
+{
+	vTaskDelay(msek/portTICK_PERIOD_MS);
+}
+
+extern "C" void task_bme280_normal_mode(void *ignore)
+{
+   struct bme280_t bme280 = {
+   	.bus_write = BME280_I2C_bus_write,
+   	.bus_read = BME280_I2C_bus_read,
+   	.dev_addr = CONFIG_BME280_ADDRESS,
+   	.delay_msec = BME280_delay_msek
+   };
+   int i=0;
+   int h=0;
+   int t=0;
+   int p=0;
+   float hsum=0;
+   float tsum=0;
+   float psum=0;
+
+   s32 com_rslt;
+   s32 v_uncomp_pressure_s32;
+   s32 v_uncomp_temperature_s32;
+   s32 v_uncomp_humidity_s32;
+   if( xSemaphore != NULL )
+   {
+       if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE )
+       {
+
+	com_rslt = bme280_init(&bme280);
+
+	com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
+	com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
+	com_rslt += bme280_set_oversamp_humidity(BME280_OVERSAMP_1X);
+
+	com_rslt += bme280_set_standby_durn(BME280_STANDBY_TIME_1_MS);
+	com_rslt += bme280_set_filter(BME280_FILTER_COEFF_16);
+
+	//com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+	com_rslt += bme280_set_power_mode(BME280_FORCED_MODE);
+	if (com_rslt == SUCCESS) {
+	 i=0;
+	 for(i=0;i<10;i++){
+	   vTaskDelay(40/portTICK_PERIOD_MS);
+	   com_rslt = bme280_read_uncomp_pressure_temperature_humidity(
+	   	&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
+	   if (com_rslt == SUCCESS) {
+	     hsum=bme280_compensate_humidity_double(v_uncomp_humidity_s32);
+	     psum=bme280_compensate_pressure_double(v_uncomp_pressure_s32);
+	     tsum=bme280_compensate_temperature_double(v_uncomp_temperature_s32);
+	   } else {
+	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
+	   }
+	 }
+	 hsum=0;
+         psum=0;
+         tsum=0;
+	 for(i=0;i<10;i++){
+	   vTaskDelay(40/portTICK_PERIOD_MS);
+	   com_rslt = bme280_read_uncomp_pressure_temperature_humidity(
+	   	&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
+
+	   if (com_rslt == SUCCESS) {
+	     hsum+=bme280_compensate_humidity_double(v_uncomp_humidity_s32);
+	     psum+=bme280_compensate_pressure_double(v_uncomp_pressure_s32)/100;
+	     tsum+=bme280_compensate_temperature_double(v_uncomp_temperature_s32);
+	     //ESP_LOGI(TAG_BME280, "%.2f degC / %.3f hPa / %.3f %%",
+	     //bme280_compensate_temperature_double(v_uncomp_temperature_s32),
+	     //bme280_compensate_pressure_double(v_uncomp_pressure_s32)/100, // Pa -> hPa
+	     //bme280_compensate_humidity_double(v_uncomp_humidity_s32));
+	   } else {
+	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
+	   }
+	 }
+	 h=hsum/i*10;
+	 p=psum/i*10;
+	 t=tsum/i*10;
+	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
+	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
+	 //printf("%s",msgData);
+   	//if(counter%TIMESLOT!=0){
+  	// char* keys[]={"pres","temp","hum"}; 
+  	// int values[]={p,t,h};
+  	// sensordata_insert_values2((unsigned char **) &rtc_buffer,timeref*SLEEPTIME,keys,values,3,&rtc_buffer_len);
+	//} 
+	
+	} else {
+		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
+	}
+
+	xSemaphoreGive( xSemaphore );
+       }
+    
+   }
+	
+   	//if(counter%TIMESLOT!=0){
+	//	counter+=1;
+      	//	timeref+=1;
+	//	sleeppa(SLEEPTIME);
+        //};
+	vTaskDelete(NULL);
+}
+
 
 void sleeppa(int sec)
 {
@@ -425,7 +603,8 @@ extern "C" void app_main(void)
                //cayenne_lpp_add_analog_input(&tlpp,0,SLEEP_INTERVAL);
                //cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
                //cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
-               xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+               //xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+    	       xTaskCreate(&task_bme280_normal_mode, "bme280_normal_mode",  2048, NULL, 6, NULL);
                counter+=1;
                while (1) {
 
