@@ -55,8 +55,10 @@ const char *appKey = CONFIG_appKey;
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
 
-#define TIMESLOT 8 
-#define SLEEP_INTERVAL 300
+#define TAG_BME280 "BME280"
+
+#define TIMESLOT 3 
+#define SLEEP_INTERVAL 10
 static TheThingsNetwork ttn;
 
 const unsigned TX_INTERVAL = 20;
@@ -219,14 +221,21 @@ void bmp280_status(void *pvParamters)
 
 extern "C" void i2c_master_init()
 {
-	i2c_config_t i2c_config = {
-		.mode = I2C_MODE_MASTER,
-		.sda_io_num = SDA_GPIO,
-		.sda_pullup_en = GPIO_PULLUP_ENABLE,
-		.scl_io_num = SCL_GPIO,
-		.scl_pullup_en = GPIO_PULLUP_ENABLE,
-		//.master.clk_speed = 1000000
-	};
+	//i2c_config_t i2c_config = {
+	//	.mode = I2C_MODE_MASTER,
+	//	.sda_io_num = SDA_GPIO,
+	//	.sda_pullup_en = GPIO_PULLUP_ENABLE,
+	//	.scl_io_num = SCL_GPIO,
+	//	.scl_pullup_en = GPIO_PULLUP_ENABLE,
+	//	.master.clk_speed = 1000000
+	//};
+	i2c_config_t i2c_config;
+	i2c_config.mode = I2C_MODE_MASTER;
+	i2c_config.sda_io_num = SDA_GPIO;
+	i2c_config.sda_pullup_en = GPIO_PULLUP_ENABLE;
+	i2c_config.scl_io_num = SCL_GPIO;
+	i2c_config.scl_pullup_en = GPIO_PULLUP_ENABLE;
+	i2c_config.master.clk_speed = 1000000;
 	i2c_param_config(I2C_NUM_0, &i2c_config);
 	i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
 }
@@ -285,6 +294,7 @@ s8 BME280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
 
 	i2c_cmd_link_delete(cmd);
 
+	return (s8)iError;
 }
 
 void BME280_delay_msek(u32 msek)
@@ -294,12 +304,18 @@ void BME280_delay_msek(u32 msek)
 
 extern "C" void task_bme280_normal_mode(void *ignore)
 {
-   struct bme280_t bme280 = {
-   	.bus_write = BME280_I2C_bus_write,
-   	.bus_read = BME280_I2C_bus_read,
-   	.dev_addr = CONFIG_BME280_ADDRESS,
-   	.delay_msec = BME280_delay_msek
-   };
+   //struct bme280_t bme280 = {
+   //	.bus_write = BME280_I2C_bus_write,
+   //	.bus_read = BME280_I2C_bus_read,
+   //	.dev_addr = CONFIG_BME280_ADDRESS,
+   //	.delay_msec = BME280_delay_msek
+   //};
+   struct bme280_t bme280;
+   bme280.bus_write = BME280_I2C_bus_write;
+   bme280.bus_read = BME280_I2C_bus_read;
+   bme280.dev_addr = CONFIG_BME280_ADDRESS;
+   bme280.delay_msec = BME280_delay_msek;
+
    int i=0;
    int h=0;
    int t=0;
@@ -339,7 +355,7 @@ extern "C" void task_bme280_normal_mode(void *ignore)
 	     psum=bme280_compensate_pressure_double(v_uncomp_pressure_s32);
 	     tsum=bme280_compensate_temperature_double(v_uncomp_temperature_s32);
 	   } else {
-	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
+	     printf("measure error. code: %d", com_rslt);
 	   }
 	 }
 	 hsum=0;
@@ -359,7 +375,7 @@ extern "C" void task_bme280_normal_mode(void *ignore)
 	     //bme280_compensate_pressure_double(v_uncomp_pressure_s32)/100, // Pa -> hPa
 	     //bme280_compensate_humidity_double(v_uncomp_humidity_s32));
 	   } else {
-	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
+	     printf("measure error. code: %d", com_rslt);
 	   }
 	 }
 	 h=hsum/i*10;
@@ -375,7 +391,7 @@ extern "C" void task_bme280_normal_mode(void *ignore)
 	//} 
 	
 	} else {
-		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
+		printf("init or setting error. code: %d", com_rslt);
 	}
 
 	xSemaphoreGive( xSemaphore );
