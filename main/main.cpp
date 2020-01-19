@@ -25,6 +25,7 @@ extern "C" {
 #include "../src/lmic/lmic.h"
 #include "../src/hal/hal_esp32.h"
 
+#include "cayenne_lpp.h"
 // NOTE:
 // The LoRaWAN frequency and the radio chip must be configured by running 'make menuconfig'.
 // Go to Components / The Things Network, select the appropriate values and save.
@@ -66,9 +67,27 @@ RTC_DATA_ATTR int RTCseqnoUp;
 RTC_DATA_ATTR int RTCseqnoDn;
 RTC_DATA_ATTR int deepsleep=0;
 
+float t;
+float p;
+float h;
+
+extern "C"{
+static void _print_buffer(cayenne_lpp_t *lpp)
+{
+	printf("buffer:");
+	uint8_t i=0;
+	for (i = 0; i < lpp->cursor; ++i) {
+		printf("%0X",lpp->buffer[i]);
+	}
+	printf("\n");
+
+}
+
+}
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[32] = "Hello, world";
 
+RTC_DATA_ATTR cayenne_lpp_t lpp = { 0 };
 
 void bmp280_status(void *pvParamters)
 {
@@ -158,13 +177,14 @@ void bmp280_status(void *pvParamters)
 	            printf("\n");
 		}
 	    }
-	    int p=(psum/i*10)/100;
-	    int t=(tsum/i*10);
 	    if (bme280p){
-	    	int h=(hsum/i*10);
-	    	sprintf((char*)msgData,"pres:%d,temp:%d,hum:%d",p,t,h);
+	      p=psum/i/100;
+	      t=tsum/i;
+	      h=hsum/i;
 	    }else{
-	    	sprintf((char*)msgData,"pres:%d,temp:%d",p,t);
+	      p=psum/i/100;
+	      t=tsum/i;
+	      h=hsum/i;
 	    }
 	    xSemaphoreGive( xSemaphore );
 	}
@@ -232,11 +252,12 @@ void sendMessages(void* pvParameter)
    	{
     	    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
 	        printf("Sending message...\n");
-	        TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
+	      	_print_buffer(&lpp);
+	       	TTNResponseCode res = ttn.transmitMessage((unsigned char*) lpp.buffer, lpp.cursor);
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 		RTCseqnoUp=LMIC.seqnoUp;	
 		RTCseqnoDn=LMIC.seqnoDn;	
-		sleeppa(20);
+		sleeppa(SLEEP_INTERVAL);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
 	}
