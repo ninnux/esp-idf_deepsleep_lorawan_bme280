@@ -99,9 +99,7 @@ static uint8_t msgData[50] = "Hello, world";
 //RTC_DATA_ATTR char rtc_buffer[1024];
 //RTC_DATA_ATTR int rtc_buffer_len=0;
 
-RTC_DATA_ATTR cayenne_lpp_t tlpp = { 0 };
-RTC_DATA_ATTR cayenne_lpp_t hlpp = { 0 };
-RTC_DATA_ATTR cayenne_lpp_t plpp = { 0 };
+RTC_DATA_ATTR cayenne_lpp_t lpp = { 0 };
 
 void bmp280_status(void *pvParamters)
 {
@@ -243,9 +241,7 @@ void sleeppa(int sec)
         default:{
 	    //deepsleep=0;
             printf("Not a deep sleep reset\n");
-	    cayenne_lpp_reset(&tlpp);
-	    cayenne_lpp_reset(&hlpp);
-	    cayenne_lpp_reset(&plpp);
+	    cayenne_lpp_reset(&lpp);
   	    //sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
         }
     }
@@ -287,27 +283,11 @@ void sendMessages(void* pvParameter)
   	                //int values[]={999,33,66};
   	                //sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
 	        	//TTNResponseCode res = ttn.transmitMessage(msgData, sizeof(msgData) - 1);
-	      		_print_buffer(&tlpp);
-	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) tlpp.buffer, tlpp.cursor);
+	      		_print_buffer(&lpp);
+	        	TTNResponseCode res = ttn.transmitMessage((unsigned char*) lpp.buffer, lpp.cursor);
 	        	if(res == kTTNSuccessfulTransmission){
 				 printf("Message sent.\n");
-	    			cayenne_lpp_reset(&tlpp);
-			}else{
-				printf("Transmission failed.\n");
-			}
-	      		_print_buffer(&hlpp);
-	        	res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
-	        	if(res == kTTNSuccessfulTransmission){
-				 printf("Message sent.\n");
-	    			cayenne_lpp_reset(&hlpp);
-			}else{
-				printf("Transmission failed.\n");
-			}
-	      		_print_buffer(&plpp);
-	        	res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
-	        	if(res == kTTNSuccessfulTransmission){
-				 printf("Message sent.\n");
-	    			cayenne_lpp_reset(&plpp);
+	    			cayenne_lpp_reset(&lpp);
 			}else{
 				printf("Transmission failed.\n");
 			}
@@ -427,9 +407,9 @@ extern "C" void app_main(void)
                     {
                      if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE ) {
 	       	       printf("p:%f h:%f t:%f\n",p,h,t);
-               	       cayenne_lpp_add_temperature(&tlpp, counter, t);
-               	       cayenne_lpp_add_relative_humidity(&hlpp, counter, h);
-               	       cayenne_lpp_add_barometric_pressure(&plpp, counter, p);
+               	       cayenne_lpp_add_temperature(&lpp, counter, t);
+               	       cayenne_lpp_add_relative_humidity(&lpp, counter, h);
+               	       cayenne_lpp_add_barometric_pressure(&lpp, counter, p);
                        sleeppa(SLEEP_INTERVAL);
                      }
                     }
