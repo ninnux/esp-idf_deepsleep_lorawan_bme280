@@ -56,6 +56,7 @@ const char *appKey = CONFIG_appKey;
 
 static TheThingsNetwork ttn;
 
+#define SLEEP_INTERVAL 10
 const unsigned TX_INTERVAL = 20;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
@@ -186,6 +187,9 @@ void bmp280_status(void *pvParamters)
 	      t=tsum/i;
 	      h=hsum/i;
 	    }
+            cayenne_lpp_add_temperature(&lpp, 0, t);
+            cayenne_lpp_add_relative_humidity(&lpp, 0, h);
+            cayenne_lpp_add_barometric_pressure(&lpp, 0, p);
 	    xSemaphoreGive( xSemaphore );
 	}
     }
@@ -226,13 +230,13 @@ void sleeppa(int sec)
     printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
     esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
 
-    const int ext_wakeup_pin_1 = 25;
-    const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
-    const int ext_wakeup_pin_2 = 26;
-    const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
+    //const int ext_wakeup_pin_1 = 25;
+    //const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
+    //const int ext_wakeup_pin_2 = 26;
+    //const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
 
-    printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
-    esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+    //printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
+    //esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
 
     // Isolate GPIO12 pin from external circuits. This is needed for modules
     // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
@@ -257,6 +261,7 @@ void sendMessages(void* pvParameter)
 	        printf(res == kTTNSuccessfulTransmission ? "Message sent.\n" : "Transmission failed.\n");
 		RTCseqnoUp=LMIC.seqnoUp;	
 		RTCseqnoDn=LMIC.seqnoDn;	
+	        cayenne_lpp_reset(&lpp);
 		sleeppa(SLEEP_INTERVAL);
                 //vTaskDelay(TX_INTERVAL * 1000 / portTICK_PERIOD_MS);
 		}
