@@ -16,8 +16,10 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "stdio.h"
+#include "driver/gpio.h"
+#include "driver/i2c.h"
 extern "C" {
-#include "bmp280.h"
+//#include "bmp280.h"
 #include "bme280.h"
 }
 
@@ -54,8 +56,13 @@ const char *appKey = CONFIG_appKey;
 
 #define SDA_GPIO (gpio_num_t)CONFIG_SCA_PIN 
 #define SCL_GPIO (gpio_num_t)CONFIG_SCL_PIN 
+//#define SDA_GPIO (gpio_num_t) 16
+//#define SCL_GPIO (gpio_num_t) 17
 
 #define TAG_BME280 "BME280"
+
+#define I2C_MASTER_ACK (i2c_ack_type_t) 0
+#define I2C_MASTER_NACK (i2c_ack_type_t) 1
 
 #define TIMESLOT 3 
 #define SLEEP_INTERVAL 10
@@ -91,9 +98,6 @@ static void _print_buffer(cayenne_lpp_t *lpp)
 
 }
 
-extern "C" {
-#include "ninux_sensordata_pb.h"
-}
 SemaphoreHandle_t xSemaphore = NULL;
 static uint8_t msgData[50] = "Hello, world";
 //static uint8_t msgData[1024] = "Hello, world";
@@ -106,116 +110,116 @@ RTC_DATA_ATTR cayenne_lpp_t tlpp = { 0 };
 RTC_DATA_ATTR cayenne_lpp_t hlpp = { 0 };
 RTC_DATA_ATTR cayenne_lpp_t plpp = { 0 };
 
-void bmp280_status(void *pvParamters)
-{
-    bmp280_params_t params;
-    bmp280_init_default_params(&params);
-    bmp280_t dev;
-    float psum=0;
-    float tsum=0;
-    float hsum=0;
-    esp_err_t res;
-
-    if( xSemaphore != NULL )
-    {
-       if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE )
-       {
-	    while (i2cdev_init() != ESP_OK)
-	    {
-	        printf("Could not init I2Cdev library\n");
-	        vTaskDelay(250 / portTICK_PERIOD_MS);
-	    }
-
-	    while (bmp280_init_desc(&dev, BMP280_I2C_ADDRESS_0, I2C_NUM_0 , SDA_GPIO, SCL_GPIO) != ESP_OK)
-	    {
-	        printf("Could not init device descriptor\n");
-	        vTaskDelay(250 / portTICK_PERIOD_MS);
-	    }
-
-	    while ((res = bmp280_init(&dev, &params)) != ESP_OK)
-	    {
-	        printf("Could not init BMP280, err: %d\n", res);
-	        vTaskDelay(250 / portTICK_PERIOD_MS);
-	    }
-
-	    bool bme280p = dev.id == BME280_CHIP_ID;
-	    printf("BMP280: found %s\n", bme280p ? "BME280" : "BMP280");
-
-	    float pressure, temperature, humidity;
-	    int i=0;
-	    bool busy;
-	    while (i<10) // scaldo il sensore con 10 letture a vuoto
-	    {	
-	        i++;
-	        vTaskDelay(500 / portTICK_PERIOD_MS);
-		// force mode
-		bmp280_force_measurement(&dev);
-		do { bmp280_is_measuring(&dev, &busy); } while(busy);	
-		//
-	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
-	        {
-	            printf("Temperature/pressure reading failed\n");
-	            continue;
-	        }
-
-	        psum+=pressure;
-	        tsum+=temperature;
-
-	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
-	        if (bme280p){
-	            printf(", Humidity: %.2f\n", humidity);
-	            hsum+=humidity;
-	        }
-	        else{
-	            printf("\n");
-	        }
-	    }
-	    i=0;
-	    pressure=0;
-            temperature=0;
-            humidity=0;
-	    psum=0;
-            tsum=0;
-            hsum=0;
-	    while (i<10)
-	    {	
-		i++;
-	        vTaskDelay(500 / portTICK_PERIOD_MS);
-	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
-	        {
-	            printf("Temperature/pressure reading failed\n");
-	            continue;
-	        }
-
-		psum+=pressure;
-		tsum+=temperature;
-
-	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
-	        if (bme280p){
-	            printf(", Humidity: %.2f\n", humidity);
-		    hsum+=humidity;
-		}
-	        else{
-	            printf("\n");
-		}
-	    }
-	    //int p=(psum/i*10)/100;
-	    //int t=(tsum/i*10);
-	    if (bme280p){
-	    	//int h=(hsum/i*10);
-	      p=psum/i/100;
-	      t=tsum/i;
-	      h=hsum/i;
-	    }else{
-	      p=psum/i;
-	      t=tsum/i;
-	      h=hsum/i;
-	    }
-	    xSemaphoreGive( xSemaphore );
-	}
-    }
-    vTaskDelete( NULL );
-}
+//void bmp280_status(void *pvParamters)
+//{
+//    bmp280_params_t params;
+//    bmp280_init_default_params(&params);
+//    bmp280_t dev;
+//    float psum=0;
+//    float tsum=0;
+//    float hsum=0;
+//    esp_err_t res;
+//
+//    if( xSemaphore != NULL )
+//    {
+//       if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE )
+//       {
+//	    while (i2cdev_init() != ESP_OK)
+//	    {
+//	        printf("Could not init I2Cdev library\n");
+//	        vTaskDelay(250 / portTICK_PERIOD_MS);
+//	    }
+//
+//	    while (bmp280_init_desc(&dev, BMP280_I2C_ADDRESS_0, I2C_NUM_0 , SDA_GPIO, SCL_GPIO) != ESP_OK)
+//	    {
+//	        printf("Could not init device descriptor\n");
+//	        vTaskDelay(250 / portTICK_PERIOD_MS);
+//	    }
+//
+//	    while ((res = bmp280_init(&dev, &params)) != ESP_OK)
+//	    {
+//	        printf("Could not init BMP280, err: %d\n", res);
+//	        vTaskDelay(250 / portTICK_PERIOD_MS);
+//	    }
+//
+//	    bool bme280p = dev.id == BME280_CHIP_ID;
+//	    printf("BMP280: found %s\n", bme280p ? "BME280" : "BMP280");
+//
+//	    float pressure, temperature, humidity;
+//	    int i=0;
+//	    bool busy;
+//	    while (i<10) // scaldo il sensore con 10 letture a vuoto
+//	    {	
+//	        i++;
+//	        vTaskDelay(500 / portTICK_PERIOD_MS);
+//		// force mode
+//		bmp280_force_measurement(&dev);
+//		do { bmp280_is_measuring(&dev, &busy); } while(busy);	
+//		//
+//	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
+//	        {
+//	            printf("Temperature/pressure reading failed\n");
+//	            continue;
+//	        }
+//
+//	        psum+=pressure;
+//	        tsum+=temperature;
+//
+//	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
+//	        if (bme280p){
+//	            printf(", Humidity: %.2f\n", humidity);
+//	            hsum+=humidity;
+//	        }
+//	        else{
+//	            printf("\n");
+//	        }
+//	    }
+//	    i=0;
+//	    pressure=0;
+//            temperature=0;
+//            humidity=0;
+//	    psum=0;
+//            tsum=0;
+//            hsum=0;
+//	    while (i<10)
+//	    {	
+//		i++;
+//	        vTaskDelay(500 / portTICK_PERIOD_MS);
+//	        if (bmp280_read_float(&dev, &temperature, &pressure, &humidity) != ESP_OK)
+//	        {
+//	            printf("Temperature/pressure reading failed\n");
+//	            continue;
+//	        }
+//
+//		psum+=pressure;
+//		tsum+=temperature;
+//
+//	        printf("Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
+//	        if (bme280p){
+//	            printf(", Humidity: %.2f\n", humidity);
+//		    hsum+=humidity;
+//		}
+//	        else{
+//	            printf("\n");
+//		}
+//	    }
+//	    //int p=(psum/i*10)/100;
+//	    //int t=(tsum/i*10);
+//	    if (bme280p){
+//	    	//int h=(hsum/i*10);
+//	      p=psum/i/100;
+//	      t=tsum/i;
+//	      h=hsum/i;
+//	    }else{
+//	      p=psum/i;
+//	      t=tsum/i;
+//	      h=hsum/i;
+//	    }
+//	    xSemaphoreGive( xSemaphore );
+//	}
+//    }
+//    vTaskDelete( NULL );
+//}
 
 
 
@@ -265,7 +269,7 @@ extern "C" s8 BME280_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cn
 	return (s8)iError;
 }
 
-s8 BME280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
+extern "C" s8 BME280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
 {
 	s32 iError = BME280_INIT_VALUE;
 	esp_err_t espRc;
@@ -317,9 +321,9 @@ extern "C" void task_bme280_normal_mode(void *ignore)
    bme280.delay_msec = BME280_delay_msek;
 
    int i=0;
-   int h=0;
-   int t=0;
-   int p=0;
+   //int h=0;
+   //int t=0;
+   //int p=0;
    float hsum=0;
    float tsum=0;
    float psum=0;
@@ -378,10 +382,10 @@ extern "C" void task_bme280_normal_mode(void *ignore)
 	     printf("measure error. code: %d", com_rslt);
 	   }
 	 }
-	 h=hsum/i*10;
-	 p=psum/i*10;
-	 t=tsum/i*10;
-	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
+	 h=hsum/i;
+	 p=psum/i;
+	 t=tsum/i;
+	 //printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
 	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
 	 //printf("%s",msgData);
    	//if(counter%TIMESLOT!=0){
@@ -620,6 +624,7 @@ extern "C" void app_main(void)
                //cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
                //cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
                //xTaskCreate( &bmp280_status, "bmp280_status", 2048, NULL, 5, NULL );
+	       i2c_master_init();
     	       xTaskCreate(&task_bme280_normal_mode, "bme280_normal_mode",  2048, NULL, 6, NULL);
                counter+=1;
                while (1) {
