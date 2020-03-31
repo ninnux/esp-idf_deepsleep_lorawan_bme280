@@ -484,6 +484,12 @@ void sendTMessage2()
 
         cayenne_lpp_add_analog_input(&tlpp,0,SLEEP_INTERVAL);
 	_print_buffer(&tlpp);
+
+	for (uint8_t i = 0; i < 9; i++) {
+	  if (i != 0) {
+	    LMIC_disableChannel(i);
+	  }
+	}
 	TTNResponseCode res = ttn.transmitMessage((unsigned char*) tlpp.buffer, tlpp.cursor);
 	if(res == kTTNSuccessfulTransmission){
 		 printf("Message sent.\n");
@@ -500,6 +506,11 @@ void sendHMessage2()
 
         cayenne_lpp_add_analog_input(&hlpp,0,SLEEP_INTERVAL);
 	_print_buffer(&hlpp);
+	for (uint8_t i = 0; i < 9; i++) {
+	  if (i != 0) {
+	    LMIC_disableChannel(i);
+	  }
+	}
 	TTNResponseCode res = ttn.transmitMessage((unsigned char*) hlpp.buffer, hlpp.cursor);
 	if(res == kTTNSuccessfulTransmission){
 		 printf("Message sent.\n");
@@ -517,6 +528,11 @@ void sendPMessage2()
 
         cayenne_lpp_add_analog_input(&plpp,0,SLEEP_INTERVAL);
 	_print_buffer(&plpp);
+	for (uint8_t i = 0; i < 9; i++) {
+	  if (i != 0) {
+	    LMIC_disableChannel(i);
+	  }
+	}
 	TTNResponseCode res = ttn.transmitMessage((unsigned char*) plpp.buffer, plpp.cursor);
 	if(res == kTTNSuccessfulTransmission){
 		 printf("Message sent.\n");
@@ -699,6 +715,8 @@ extern "C" void app_main(void)
     	       ttn_hal.initCriticalSection();
                LMIC_reset();
                //hal_enterCriticalSection();
+
+
                LMIC_setSession (RTCnetid, RTCdevaddr, RTCnwkKey, RTCartKey);
                //hal_leaveCriticalSection();
                LMIC.seqnoUp=RTCseqnoUp;
